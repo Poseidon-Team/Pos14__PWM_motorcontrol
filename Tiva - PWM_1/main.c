@@ -14,17 +14,17 @@
 #include "driverlib/pin_map.h"
 
     //Variables
-    unsigned long increment = 1;	// Rate (step) change of Duty Cycle
-    unsigned long DutyCycle = 2;	// The Duty Cycle sent to the PWM
-    int maxDutyCycle = 320;			// This number represents the step of th Duty Cycle (when DutyCycle=320 --> Duty Cycle is 100%)
-    int minDutyCycle = 1;
-    uint32_t ButtonStatus = 0;		// Status of PF4
+    unsigned long increment = 1;	// Rate (step) change of Duty Cycle.
+    unsigned long DutyCycle = 2;	// The Duty Cycle sent to the PWM. We initialize it to start from 2.
+    int maxDutyCycle = 320;			// This number represents the max value of the PWM according with the position of the potentiometer.
+    int minDutyCycle = 1;			// Min value of PWM
+    uint32_t ButtonStatus = 16;		// Status of PF4. PF4 is the "life button". If ButtonStatus=16 it means that button is released else if ButtonStatus=0 the button is pressed
 
-    float value0, value1, value2, value3, valueavr = 0.0 ;
+    float value0, value1, value2, value3, valueavr = 0.0 ;	//This values are to read 4 times the ACD value of the potentiometer and find there average.
 	uint32_t ui32ADC0Value[4];
 
 	//Variables for PWM
-	int PWM_FREQUENCY=1000;
+	int PWM_FREQUENCY=1000;		//The frequency of the PWM
 	volatile uint32_t ui32Load;
 	volatile uint32_t ui32PWMClock;
 	//volatile uint8_t ui8Adjust = 83;
@@ -50,25 +50,6 @@ void ConfigPWM()
 	   GPIOPinConfigure(GPIO_PF2_M1PWM6);
 	   GPIOPinTypePWM(GPIO_PORTF_BASE, GPIO_PIN_2);
 
-	   //******************************************************************************************
-	   /*
-	   // Configure PWM Options
-	   // PWM_GEN_3 Covers M1PWM6 and M1PWM7 (See page 207 4/11/13 DriverLib doc)
-	   PWMGenConfigure(PWM1_BASE, PWM_GEN_3, PWM_GEN_MODE_DOWN | PWM_GEN_MODE_NO_SYNC);
-
-	   // Set the Period (expressed in clock ticks)
-	   PWMGenPeriodSet(PWM1_BASE, PWM_GEN_3, maxDutyCycle);
-
-	   // Set where to start PWM Duty Cycle
-	   PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6, minDutyCycle);
-
-	   // Enable the PWM generator
-	   PWMGenEnable(PWM1_BASE, PWM_GEN_3);
-
-	   // Turn on the Output pins
-	   PWMOutputState(PWM1_BASE, PWM_OUT_5_BIT | PWM_OUT_6_BIT | PWM_OUT_7_BIT, true);
-	   */
-	   //++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 	   ui32PWMClock = SysCtlClockGet() / 64;
 	   ui32Load = (ui32PWMClock / PWM_FREQUENCY)-1;
 	   PWMGenConfigure(PWM1_BASE, PWM_GEN_3, PWM_GEN_MODE_DOWN);
@@ -85,7 +66,8 @@ void ConfigADC12()
 	SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0);	// Enable the ADC0 periphera
 
 	ADCSequenceConfigure(ADC0_BASE, 1, ADC_TRIGGER_PROCESSOR, 0);
-	// Read Analog signal from PE2
+
+	// For reading 4 times Analog signal from PE2
 	ADCSequenceStepConfigure(ADC0_BASE, 1, 0, ADC_CTL_CH1);
 	ADCSequenceStepConfigure(ADC0_BASE, 1, 1, ADC_CTL_CH1);
 	ADCSequenceStepConfigure(ADC0_BASE, 1, 2, ADC_CTL_CH1);
@@ -101,7 +83,6 @@ int main(void)
     // Set clock
    SysCtlClockSet(SYSCTL_SYSDIV_5|SYSCTL_USE_PLL|SYSCTL_OSC_MAIN|SYSCTL_XTAL_16MHZ);	// Set system clock
 
-
    ConfigGPIO();
    ConfigPWM();
    ConfigADC12();
@@ -112,20 +93,20 @@ int main(void)
 		ADCIntClear(ADC0_BASE, 1);	// Clear ADC0 interupt flag
 		ADCProcessorTrigger(ADC0_BASE, 1);	// Allow to trigger the ADC conversion with software
 
-		while(!ADCIntStatus(ADC0_BASE, 1, false))
+		while(!ADCIntStatus(ADC0_BASE, 1, false))	//wait for ADC to have something to read.
 		{
 		}
 
 		ADCSequenceDataGet(ADC0_BASE, 1, ui32ADC0Value);
-		value0 = ui32ADC0Value[0];
-		value1 = ui32ADC0Value[1];
-		value2 = ui32ADC0Value[2];
-		value3 = ui32ADC0Value[3];
+		value0 = ui32ADC0Value[0];	// Read potentiometer 1st time
+		value1 = ui32ADC0Value[1];	// Read potentiometer 2nd time
+		value2 = ui32ADC0Value[2];	// Read potentiometer 3rd time
+		value3 = ui32ADC0Value[3];	// Read potentiometer 4th time
 
-		valueavr = (value0 + value1 + value2 + value3) / 4;
-		maxDutyCycle = (valueavr/4096) * 625;
+		valueavr = (value0 + value1 + value2 + value3) / 4;	// Get average of the 4 measurments
+		maxDutyCycle = (valueavr/4096) * 625;	// Scale it to the PWM Tiva range.
 
-		if(maxDutyCycle <= 3) {maxDutyCycle = 2;}
+		if(maxDutyCycle <= 3) {maxDutyCycle = 2;}	// If very small value
 
 		// Read if button is pressed or not
 		ButtonStatus = GPIOPinRead(GPIO_PORTF_BASE, GPIO_PIN_4); // Read the status of PF4
@@ -143,9 +124,8 @@ int main(void)
 	    }
 
 		PWMPulseWidthSet(PWM1_BASE, PWM_OUT_6,DutyCycle);
-		delayMS(20);
+		delayMS(2);
 
    }
 
 }
-
